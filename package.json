@@ -1,6 +1,6 @@
 {
   "name": "@cognitive3d/zappar-three",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Cognitive3D WebXR analytics for Zappar WebAR scenes built with Mattercraft.",
   "keywords": [
     "xr",
