@@ -1,0 +1,5 @@
+node_modules/
+lib/
+src/vendor/c3d-bundle-threejs.umd.js
+src/vendor/c3d-bundle-threejs.umd.js.map
+.DS_Store
