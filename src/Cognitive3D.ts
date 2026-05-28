@@ -709,8 +709,11 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
         const exportScene = new THREE.Scene();
         if (liveScene.background) exportScene.background = liveScene.background;
 
+        // Clone the whole sub-tree. The adapter's exportScene strips
+        // individual dynamic-object nodes from the clone — we don't want to
+        // drop entire branches that just happen to contain a dynamic, because
+        // that would also remove sibling static geometry (ShadowPlane etc.).
         for (const child of this._analyticsOriginNode.children) {
-            if (this._isDynamicObjectRoot(child)) continue;
             exportScene.add(child.clone(true));
         }
 
