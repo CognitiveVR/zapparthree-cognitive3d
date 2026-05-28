@@ -1,4 +1,4 @@
-import { Component, Behavior, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
+import { Component, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
 import { ThreeContext, ThreeSceneContext, OnBeforeRenderPriority } from "@zcomponent/three";
 import * as THREE from "three";
 import { EditorContext } from "@zcomponent/three/lib/editorcontext";
@@ -50,13 +50,13 @@ export interface Cognitive3DConstructionProps {
 }
 
 /**
- * @zbehavior
+ * @zcomponent
  * @zdescription Cognitive3D Integration (Zappar WebAR)
  * @ztag three/Object3D/Analytics/Cognitive3D
  * @zparents three/Object3D/**
  * @zicon analytics
  */
-export class Cognitive3D extends Behavior<Component> {
+export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
     private static readonly WEBAR_FLUSH_INTERVAL_MS = 10000;
     private static readonly ZAPPAR_WORLD_SCALE_MODE_ABSOLUTE = 1;
 
@@ -112,8 +112,8 @@ export class Cognitive3D extends Behavior<Component> {
         }
     }
 
-    constructor(contextManager: ContextManager, instance: Component, protected constructorProps: Cognitive3DConstructionProps) {
-        super(contextManager, instance);
+    constructor(contextManager: ContextManager, protected constructorProps: Cognitive3DConstructionProps) {
+        super(contextManager, constructorProps);
 
         this.ctx = this.contextManager.get(Cognitive3DContext);
 
