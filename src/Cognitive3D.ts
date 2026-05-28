@@ -308,6 +308,29 @@ export class Cognitive3D extends Behavior<Component> {
         return hasGeom;
     }
 
+    // Builds a PerspectiveCamera framed on the analytics origin so exports work
+    // on desktop where the Zappar camera never constructs and the Mattercraft
+    // preview has no orbit controls to fall back on.
+    private _createFallbackExportCamera(renderer: THREE.WebGLRenderer): THREE.PerspectiveCamera {
+        const size = renderer.getSize(new THREE.Vector2());
+        const aspect = size.x > 0 && size.y > 0 ? size.x / size.y : 1;
+        const camera = new THREE.PerspectiveCamera(50, aspect, 0.01, 1000);
+
+        const target = this._analyticsOriginNode || this.sceneContext.scene;
+        const bounds = new THREE.Box3().setFromObject(target);
+        const center = bounds.isEmpty() ? new THREE.Vector3(0, 0, 0) : bounds.getCenter(new THREE.Vector3());
+        const sphere = bounds.isEmpty()
+            ? new THREE.Sphere(center, 1)
+            : bounds.getBoundingSphere(new THREE.Sphere());
+        const radius = Math.max(sphere.radius, 0.5);
+
+        const offset = new THREE.Vector3(0.6, 0.6, 1).normalize().multiplyScalar(radius * 3);
+        camera.position.copy(center).add(offset);
+        camera.lookAt(center);
+        camera.updateMatrixWorld(true);
+        return camera;
+    }
+
     private findVisualNodeForTrackedObject(objectName: string): THREE.Object3D | null {
         const scene = this.sceneContext.scene;
         let visualNode: THREE.Object3D | null = null;
@@ -539,13 +562,13 @@ export class Cognitive3D extends Behavior<Component> {
             return;
         }
 
-        const renderer = this.threeContext.renderer;
-        const camera = this.sceneContext.activeCamera.value;
-
-        if (!renderer || !camera) {
-            console.warn("Cognitive3D: Missing Renderer or Camera for export.");
+        const renderer = this.threeContext.renderer as THREE.WebGLRenderer;
+        if (!renderer) {
+            console.warn("Cognitive3D: Missing Renderer for export.");
             return;
         }
+
+        const camera = this.sceneContext.activeCamera.value || this._createFallbackExportCamera(renderer);
 
         this.ctx.debug(`Cognitive3D: Checking ${this.ctx.trackedBehaviors.size} Dynamic Objects for export...`);
 
@@ -621,7 +644,7 @@ export class Cognitive3D extends Behavior<Component> {
         if (!this.c3dAdapter) return;
         const renderer = this.threeContext.renderer as THREE.WebGLRenderer;
         const liveScene = this.sceneContext.scene;
-        let camera = this.sceneContext.activeCamera.value;
+        let camera: THREE.Camera | null = this.sceneContext.activeCamera.value;
 
         try {
             const editorContext = this.contextManager.get(EditorContext);
@@ -633,7 +656,11 @@ export class Cognitive3D extends Behavior<Component> {
             this.ctx.debug("Cognitive3D: Editor environment not found, using active camera.");
         }
 
-        if (!renderer || !liveScene || !camera) return;
+        if (!renderer || !liveScene) return;
+        if (!camera) {
+            camera = this._createFallbackExportCamera(renderer);
+            this.ctx.debug("Cognitive3D: No active camera; using a synthesised camera for the export screenshot.");
+        }
 
         this.ctx.debug("Cognitive3D: Exporting Scene...");
 
