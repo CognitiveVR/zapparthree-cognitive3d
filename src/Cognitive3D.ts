@@ -1,4 +1,4 @@
-import { Component, Behavior, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
+import { Component, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
 import { ThreeContext, ThreeSceneContext, OnBeforeRenderPriority } from "@zcomponent/three";
 import * as THREE from "three";
 import { EditorContext } from "@zcomponent/three/lib/editorcontext";
@@ -50,13 +50,13 @@ export interface Cognitive3DConstructionProps {
 }
 
 /**
- * @zbehavior
+ * @zcomponent
  * @zdescription Cognitive3D Integration (Zappar WebAR)
  * @ztag three/Object3D/Analytics/Cognitive3D
  * @zparents three/Object3D/**
  * @zicon analytics
  */
-export class Cognitive3D extends Behavior<Component> {
+export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
     private static readonly WEBAR_FLUSH_INTERVAL_MS = 10000;
     private static readonly ZAPPAR_WORLD_SCALE_MODE_ABSOLUTE = 1;
 
@@ -86,15 +86,24 @@ export class Cognitive3D extends Behavior<Component> {
         }
     };
     private _visibilityChangeHandler = () => {
+        // On mobile (especially iOS Safari), `pagehide` is unreliable when the
+        // user closes the tab or backgrounds the app — visibilitychange→hidden
+        // is far more reliable. Treat going hidden as session end so the
+        // dashboard sees a complete session.
         if (document.visibilityState === "hidden" && this.c3d?.isSessionActive()) {
-            void this.c3d.sendData().catch((err: unknown) => {
-                this.ctx.debug("Cognitive3D: Failed to flush session data on hide", err);
-            });
+            void this._endC3DSession("Visibility changed to hidden");
         }
     };
     private _pageHideHandler = () => {
         if (this.c3d?.isSessionActive()) {
             void this._endC3DSession("Page hidden");
+        }
+    };
+    private _manualEndSessionHandler = () => {
+        if (this.c3d?.isSessionActive()) {
+            void this._endC3DSession("Manual end via c3d-end-session event");
+        } else {
+            this._emitRuntimeDebug("c3d-end-session received but no session is active.");
         }
     };
 
@@ -112,8 +121,8 @@ export class Cognitive3D extends Behavior<Component> {
         }
     }
 
-    constructor(contextManager: ContextManager, instance: Component, protected constructorProps: Cognitive3DConstructionProps) {
-        super(contextManager, instance);
+    constructor(contextManager: ContextManager, protected constructorProps: Cognitive3DConstructionProps) {
+        super(contextManager, constructorProps);
 
         this.ctx = this.contextManager.get(Cognitive3DContext);
 
@@ -171,6 +180,7 @@ export class Cognitive3D extends Behavior<Component> {
             window.addEventListener('keydown', this.handleKeyDown);
             window.addEventListener('c3d-export-scene', this._sceneExportRequestHandler as EventListener);
             window.addEventListener('c3d-export-dynamic-objects', this._dynamicExportRequestHandler as EventListener);
+            window.addEventListener('c3d-end-session', this._manualEndSessionHandler as EventListener);
             document.addEventListener("visibilitychange", this._visibilityChangeHandler);
             window.addEventListener("pagehide", this._pageHideHandler);
 
@@ -709,8 +719,11 @@ export class Cognitive3D extends Behavior<Component> {
         const exportScene = new THREE.Scene();
         if (liveScene.background) exportScene.background = liveScene.background;
 
+        // Clone the whole sub-tree. The adapter's exportScene strips
+        // individual dynamic-object nodes from the clone — we don't want to
+        // drop entire branches that just happen to contain a dynamic, because
+        // that would also remove sibling static geometry (ShadowPlane etc.).
         for (const child of this._analyticsOriginNode.children) {
-            if (this._isDynamicObjectRoot(child)) continue;
             exportScene.add(child.clone(true));
         }
 
@@ -747,6 +760,7 @@ export class Cognitive3D extends Behavior<Component> {
         window.removeEventListener('keydown', this.handleKeyDown);
         window.removeEventListener('c3d-export-scene', this._sceneExportRequestHandler as EventListener);
         window.removeEventListener('c3d-export-dynamic-objects', this._dynamicExportRequestHandler as EventListener);
+        window.removeEventListener('c3d-end-session', this._manualEndSessionHandler as EventListener);
         document.removeEventListener("visibilitychange", this._visibilityChangeHandler);
         window.removeEventListener("pagehide", this._pageHideHandler);
         this._stopWebARFlushLoop();
