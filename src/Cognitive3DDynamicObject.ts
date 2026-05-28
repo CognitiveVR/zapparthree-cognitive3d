@@ -3,7 +3,6 @@ import { OnBeforeRenderPriority } from "@zcomponent/three";
 import * as THREE from "three";
 
 import { Cognitive3DContext, IDynamicObjectBehavior } from "./Cognitive3DContext";
-import { ensureBehaviorHostShape } from "./Cognitive3D";
 
 const _vec = new THREE.Vector3();
 
@@ -47,7 +46,6 @@ export class Cognitive3DDynamicObject extends Behavior<Component> implements IDy
     private ctx: Cognitive3DContext;
 
     constructor(contextManager: ContextManager, instance: Component, protected constructorProps: Cognitive3DDynamicObjectConstructionProps) {
-        ensureBehaviorHostShape(instance);
         super(contextManager, instance);
 
         this.ctx = this.contextManager.get(Cognitive3DContext);

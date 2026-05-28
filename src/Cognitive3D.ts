@@ -20,28 +20,6 @@ function getARContextClass(): Promise<any> {
     return _arContextClassPromise;
 }
 
-// Mattercraft's preview runtime sometimes hands us parent components that
-// don't carry the addBehavior/removeBehavior/enabledResolved API our
-// @zcomponent/core Behavior super() expects. Stub the missing pieces so the
-// super() call doesn't crash — we don't need the full Behavior lifecycle
-// for export to work.
-export function ensureBehaviorHostShape(instance: any): void {
-    if (!instance) return;
-    if (typeof instance.addBehavior !== "function") {
-        instance.addBehavior = () => {};
-    }
-    if (typeof instance.removeBehavior !== "function") {
-        instance.removeBehavior = () => {};
-    }
-    if (!instance.enabledResolved || typeof instance.enabledResolved.addListener !== "function") {
-        instance.enabledResolved = {
-            value: true,
-            addListener: () => {},
-            removeListener: () => {},
-        };
-    }
-}
-
 export interface Cognitive3DConstructionProps {
     /** @zui */
     apiKey: string;
@@ -135,7 +113,6 @@ export class Cognitive3D extends Behavior<Component> {
     }
 
     constructor(contextManager: ContextManager, instance: Component, protected constructorProps: Cognitive3DConstructionProps) {
-        ensureBehaviorHostShape(instance);
         super(contextManager, instance);
 
         this.ctx = this.contextManager.get(Cognitive3DContext);
