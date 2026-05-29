@@ -674,15 +674,9 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
 
         this.ctx.debug("Cognitive3D: Exporting Scene...");
 
-        const strippedUserData: { obj: THREE.Object3D, isDynamic?: boolean, c3dId?: string }[] = [];
-        liveScene.traverse((obj) => {
-            if (obj.userData && (obj.userData.c3dId !== undefined || obj.userData.isDynamic !== undefined)) {
-                strippedUserData.push({ obj, isDynamic: obj.userData.isDynamic, c3dId: obj.userData.c3dId });
-                delete obj.userData.isDynamic;
-                delete obj.userData.c3dId;
-            }
-        });
-
+        // Hide dynamic objects only for the screenshot render. Don't touch
+        // userData on the live tree — _buildExportScene reads it from the
+        // clone to know which nodes to strip from the static export.
         const hiddenObjects: { obj: THREE.Object3D, originalVisibility: boolean }[] = [];
         this.ctx.trackedBehaviors.forEach(behavior => {
             const obj = behavior.getTrackedObject();
@@ -701,10 +695,6 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
             this.c3dAdapter.exportScene(sceneToExport, exportName, renderer, camera);
         } finally {
             hiddenObjects.forEach(({ obj, originalVisibility }) => { obj.visible = originalVisibility; });
-            strippedUserData.forEach(({ obj, isDynamic, c3dId }) => {
-                if (isDynamic !== undefined) obj.userData.isDynamic = isDynamic;
-                if (c3dId !== undefined) obj.userData.c3dId = c3dId;
-            });
         }
 
         this.ctx.debug(`Cognitive3D: Scene '${exportName}' exported.`);
@@ -740,6 +730,28 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
             }
         }
 
+        // Remove dynamic-object subtrees from the clone. They're tracked
+        // per-session and uploaded separately as dynamic object assets — if we
+        // leave them in the static scene export, session replay shows the
+        // object twice (one static + one tracked).
+        const dynamicNodes: THREE.Object3D[] = [];
+        exportScene.traverse((obj) => {
+            if (obj.userData?.isDynamic || obj.userData?.c3dId) {
+                dynamicNodes.push(obj);
+            }
+        });
+        dynamicNodes.forEach(node => node.parent?.remove(node));
+
+        // `c3dTrackedRoot` is an Object3D back-reference written onto
+        // interactable userData. It's a circular ref that would break the
+        // userData JSON serialisation inside GLTFExporter — strip it before
+        // export.
+        exportScene.traverse((obj) => {
+            if (obj.userData?.c3dTrackedRoot) {
+                delete obj.userData.c3dTrackedRoot;
+            }
+        });
+
         // Force everything visible in the clone. GLTFExporter is called with
         // `onlyVisible: true` and skips hidden meshes — e.g. ShadowPlane sits
         // inside UserPlacementAnchorGroup which hides its content until the
@@ -750,7 +762,9 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
             if ((obj as THREE.Mesh).isMesh) meshCount++;
         });
 
-        this._emitRuntimeDebug(`Scene export tree contains ${meshCount} mesh(es).`);
+        this._emitRuntimeDebug(
+            `Scene export tree contains ${meshCount} mesh(es); stripped ${dynamicNodes.length} dynamic-object subtree(s).`
+        );
 
         exportScene.updateMatrixWorld(true);
         return exportScene;
