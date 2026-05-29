@@ -710,34 +710,47 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
         this.ctx.debug(`Cognitive3D: Scene '${exportName}' exported.`);
     }
 
-    // When an analytics origin is bound, clone its children into a fresh Scene
-    // at identity transform. This puts the export in the same coordinate frame
-    // as the recorded gaze and object samples.
+    // Always build a fresh export scene so the visibility-forcing fix applies
+    // regardless of whether the analytics origin was resolved. When the origin
+    // is bound, we clone its children into a fresh Scene at identity transform
+    // (matching the coordinate frame of recorded gaze/object samples). When it
+    // isn't, we fall back to cloning the entire live scene structure.
     private _buildExportScene(liveScene: THREE.Scene): THREE.Scene {
-        if (!this._analyticsOriginNode) return liveScene;
-
         const exportScene = new THREE.Scene();
         if (liveScene.background) exportScene.background = liveScene.background;
 
-        // Clone the whole sub-tree. The adapter's exportScene strips
-        // individual dynamic-object nodes from the clone — we don't want to
-        // drop entire branches that just happen to contain a dynamic, because
-        // that would also remove sibling static geometry (ShadowPlane etc.).
-        for (const child of this._analyticsOriginNode.children) {
-            exportScene.add(child.clone(true));
-        }
-
-        // Include scene-level nodes (lights etc.) that live above the origin.
-        for (const sceneChild of liveScene.children) {
-            if (this._isDescendantOfOrigin(sceneChild)) continue;
-            exportScene.add(sceneChild.clone(true));
+        if (this._analyticsOriginNode) {
+            // Clone the whole sub-tree under the analytics origin. The
+            // adapter's exportScene strips individual dynamic-object nodes
+            // from the clone — we don't drop entire branches that contain a
+            // dynamic, because that would also remove sibling static geometry
+            // (ShadowPlane etc.).
+            for (const child of this._analyticsOriginNode.children) {
+                exportScene.add(child.clone(true));
+            }
+            // Include scene-level nodes (lights etc.) that live above the origin.
+            for (const sceneChild of liveScene.children) {
+                if (this._isDescendantOfOrigin(sceneChild)) continue;
+                exportScene.add(sceneChild.clone(true));
+            }
+        } else {
+            // No analytics origin — clone the entire live scene structure.
+            for (const sceneChild of liveScene.children) {
+                exportScene.add(sceneChild.clone(true));
+            }
         }
 
         // Force everything visible in the clone. GLTFExporter is called with
         // `onlyVisible: true` and skips hidden meshes — e.g. ShadowPlane sits
         // inside UserPlacementAnchorGroup which hides its content until the
         // user taps to place. Hidden meshes mean no geometry → no .bin file.
-        exportScene.traverse((obj) => { obj.visible = true; });
+        let meshCount = 0;
+        exportScene.traverse((obj) => {
+            obj.visible = true;
+            if ((obj as THREE.Mesh).isMesh) meshCount++;
+        });
+
+        this._emitRuntimeDebug(`Scene export tree contains ${meshCount} mesh(es).`);
 
         exportScene.updateMatrixWorld(true);
         return exportScene;
