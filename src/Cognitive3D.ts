@@ -52,7 +52,7 @@ export interface Cognitive3DConstructionProps {
 /**
  * @zcomponent
  * @zdescription Cognitive3D Integration (Zappar WebAR)
- * @ztag three/Object3D/Analytics/Cognitive3D
+ * @zgroup Analytics
  * @zparents three/Object3D/**
  * @zicon analytics
  */

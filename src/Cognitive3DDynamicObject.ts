@@ -1,4 +1,4 @@
-import { Component, Behavior, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
+import { Component, Behavior, ContextManager, useOnBeforeRender } from "@zcomponent/core";
 import { OnBeforeRenderPriority } from "@zcomponent/three";
 import * as THREE from "three";
 
@@ -35,7 +35,7 @@ export interface Cognitive3DDynamicObjectConstructionProps {
 /**
  * @zbehavior
  * @zdescription Marks an object for Cognitive3D Tracking & Movement
- * @ztag three/Object3D/Analytics/Cognitive3DDynamicObject
+ * @zgroup Analytics
  * @zparents three/Object3D/**
  * @zicon track_changes
  */
@@ -60,10 +60,14 @@ export class Cognitive3DDynamicObject extends Behavior<Component> implements IDy
     }
 
     private tryRegisterWithManager() {
+        // Register immediately if the manager is already in place. Waiting on
+        // started() only resolves when the AR experience actually launches
+        // (camera permission + first frame), which never happens on desktop
+        // preview — and that left trackedBehaviors empty so exports saw 0
+        // dynamic objects. The session-active SDK registration is still
+        // handled by Cognitive3D._startC3DSession when the session begins.
         if (this.ctx.registerDynamicObject) {
-            started(this.contextManager).then(() => {
-                this.ctx.registerDynamicObject?.(this);
-            });
+            this.ctx.registerDynamicObject(this);
         } else {
             if (!this.ctx.pendingRegistrations.includes(this)) {
                 this.ctx.pendingRegistrations.push(this);
