@@ -733,6 +733,12 @@ export class Cognitive3D extends Component<Cognitive3DConstructionProps> {
             exportScene.add(sceneChild.clone(true));
         }
 
+        // Force everything visible in the clone. GLTFExporter is called with
+        // `onlyVisible: true` and skips hidden meshes — e.g. ShadowPlane sits
+        // inside UserPlacementAnchorGroup which hides its content until the
+        // user taps to place. Hidden meshes mean no geometry → no .bin file.
+        exportScene.traverse((obj) => { obj.visible = true; });
+
         exportScene.updateMatrixWorld(true);
         return exportScene;
     }
