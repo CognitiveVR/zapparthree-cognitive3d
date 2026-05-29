@@ -1,4 +1,4 @@
-import { Component, ContextManager, useOnBeforeRender, started } from "@zcomponent/core";
+import { Component, Behavior, ContextManager, useOnBeforeRender } from "@zcomponent/core";
 import { OnBeforeRenderPriority } from "@zcomponent/three";
 import * as THREE from "three";
 
@@ -33,20 +33,20 @@ export interface Cognitive3DDynamicObjectConstructionProps {
 }
 
 /**
- * @zcomponent
+ * @zbehavior
  * @zdescription Marks an object for Cognitive3D Tracking & Movement
- * @ztag three/Object3D/Analytics/Cognitive3DDynamicObject
+ * @zgroup Analytics
  * @zparents three/Object3D/**
  * @zicon track_changes
  */
-export class Cognitive3DDynamicObject extends Component<Cognitive3DDynamicObjectConstructionProps> implements IDynamicObjectBehavior {
+export class Cognitive3DDynamicObject extends Behavior<Component> implements IDynamicObjectBehavior {
 
     private _isInitialized = false;
     private _lastTrackedUUID: string | null = null;
     private ctx: Cognitive3DContext;
 
-    constructor(contextManager: ContextManager, protected constructorProps: Cognitive3DDynamicObjectConstructionProps) {
-        super(contextManager, constructorProps);
+    constructor(contextManager: ContextManager, instance: Component, protected constructorProps: Cognitive3DDynamicObjectConstructionProps) {
+        super(contextManager, instance);
 
         this.ctx = this.contextManager.get(Cognitive3DContext);
 
@@ -60,10 +60,14 @@ export class Cognitive3DDynamicObject extends Component<Cognitive3DDynamicObject
     }
 
     private tryRegisterWithManager() {
+        // Register immediately if the manager is already in place. Waiting on
+        // started() only resolves when the AR experience actually launches
+        // (camera permission + first frame), which never happens on desktop
+        // preview — and that left trackedBehaviors empty so exports saw 0
+        // dynamic objects. The session-active SDK registration is still
+        // handled by Cognitive3D._startC3DSession when the session begins.
         if (this.ctx.registerDynamicObject) {
-            started(this.contextManager).then(() => {
-                this.ctx.registerDynamicObject?.(this);
-            });
+            this.ctx.registerDynamicObject(this);
         } else {
             if (!this.ctx.pendingRegistrations.includes(this)) {
                 this.ctx.pendingRegistrations.push(this);
@@ -107,7 +111,7 @@ export class Cognitive3DDynamicObject extends Component<Cognitive3DDynamicObject
         const path: string[] = [];
         const seen = new Set<string>();
         // @ts-ignore — .parent is not in public typedefs but exists at runtime
-        let current: any = this.parent;
+        let current: any = this.instance;
         while (current) {
             try {
                 const zc = current.getZComponentInstance?.();
@@ -133,11 +137,10 @@ export class Cognitive3DDynamicObject extends Component<Cognitive3DDynamicObject
     }
 
     public getTrackedObject(): THREE.Object3D | null {
-        const parent = this.parent as any;
-        let obj = parent?.element as THREE.Object3D | undefined;
+        let obj = this.instance.element as THREE.Object3D;
 
-        if (!obj && parent?.elementsResolved && parent.elementsResolved.length > 0) {
-            obj = parent.elementsResolved[0] as THREE.Object3D;
+        if (!obj && this.instance.elementsResolved && this.instance.elementsResolved.length > 0) {
+            obj = this.instance.elementsResolved[0] as THREE.Object3D;
         }
 
         if (obj) {
